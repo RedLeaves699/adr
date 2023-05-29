@@ -15,7 +15,7 @@
 # This repository was forked from https://github.com/openai/guided-diffusion, which is under the MIT license
 
 import numpy as np
-import torch as th
+import torch as torch
 
 from .gaussian_diffusion import GaussianDiffusion
 
@@ -84,7 +84,7 @@ class SpacedDiffusion(GaussianDiffusion):
     A diffusion process which can skip steps in a base diffusion process.
 
     :param use_timesteps: a collection (sequence or set) of timesteps from the
-                          original diffusion process to retain.
+                          original diffusion process to retain(保留).
     :param kwargs: the kwargs to create the base diffusion process.
     """
 
@@ -156,7 +156,7 @@ class _WrappedModel:
         self.conf = conf
 
     def __call__(self, x, ts, **kwargs):
-        map_tensor = th.tensor(  # pylint: disable=not-callable
+        map_tensor = torch.tensor(  # pylint: disable=not-callable
             self.timestep_map, device=ts.device, dtype=ts.dtype)
         new_ts = map_tensor[ts]
         if self.rescale_timesteps:

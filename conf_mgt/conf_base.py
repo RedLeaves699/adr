@@ -57,7 +57,7 @@ class Default_Conf(NoneDict):
     def __init__(self):
         pass
 
-    def get_dataloader(self, dset='train', dsName=None, batch_size=None, return_dataset=False):
+    def get_dataloader(self, dset='train', dsName=None, batch_size=None, num_device=1, return_dataset=False):
 
         if batch_size is None:
             batch_size = self.batch_size
@@ -67,7 +67,7 @@ class Default_Conf(NoneDict):
 
         if ds_conf.get('mask_loader', False):
             from guided_diffusion.image_datasets import load_data_inpa
-            return load_data_inpa(**ds_conf, conf=self)
+            return load_data_inpa(**ds_conf, conf=self, num_device=num_device)
         else:
             raise NotImplementedError()
 
@@ -75,8 +75,8 @@ class Default_Conf(NoneDict):
         return os.path.expanduser(os.path.join(self.get_default_eval_conf()['paths']['root'], 'debug/debug_variance'))
 
     @ staticmethod
-    def device():
-        return 'cuda' if torch.cuda.is_available() else 'cpu'
+    def device(num=0):
+        return 'cuda:%d'%(num) if torch.cuda.is_available() else 'cpu'
 
     def eval_imswrite(self, srs=None, img_names=None, dset=None, name=None, ext='png', lrs=None, gts=None, gt_keep_masks=None, verify_same=True):
         img_names = to_file_ext(img_names, ext)
@@ -107,6 +107,14 @@ class Default_Conf(NoneDict):
 
     def get_default_eval_name(self):
         candidates = self['data']['eval'].keys()
+        if len(candidates) != 1:
+            raise RuntimeError(
+                f"Need exactly one candidate for {self.name}: {candidates}")
+        return list(candidates)[0]
+
+    # add
+    def get_default_train_name(self):
+        candidates = self['data']['train'].keys()
         if len(candidates) != 1:
             raise RuntimeError(
                 f"Need exactly one candidate for {self.name}: {candidates}")

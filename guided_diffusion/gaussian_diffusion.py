@@ -24,7 +24,7 @@ Docstrings have been added, as well as DDIM sampling and a new collection of bet
 import enum
 
 import numpy as np
-import torch as th
+import torch
 
 from collections import defaultdict
 
@@ -173,8 +173,8 @@ class GaussianDiffusion:
     def _undo(self, img_out, t):
         beta = _extract_into_tensor(self.betas, t, img_out.shape)
 
-        img_in_est = th.sqrt(1 - beta) * img_out + \
-            th.sqrt(beta) * th.randn_like(img_out)
+        img_in_est = torch.sqrt(1 - beta) * img_out + \
+            torch.sqrt(beta) * torch.randn_like(img_out)
 
         return img_in_est
 
@@ -227,6 +227,7 @@ class GaussianDiffusion:
                  - 'variance': the model variance output.
                  - 'log_variance': the log of 'variance'.
                  - 'pred_xstart': the prediction for x_0.
+                 - 'model_output' : the model_output for training
         """
         if model_kwargs is None:
             model_kwargs = {}
@@ -237,11 +238,11 @@ class GaussianDiffusion:
         model_output = model(x, self._scale_timesteps(t), **model_kwargs)
 
         assert model_output.shape == (B, C * 2, *x.shape[2:])
-        model_output, model_var_values = th.split(model_output, C, dim=1)
+        model_output, model_var_values = torch.split(model_output, C, dim=1)
 
         if self.model_var_type == ModelVarType.LEARNED:
             model_log_variance = model_var_values
-            model_variance = th.exp(model_log_variance)
+            model_variance = torch.exp(model_log_variance)
         else:
             min_log = _extract_into_tensor(
                 self.posterior_log_variance_clipped, t, x.shape
@@ -249,7 +250,7 @@ class GaussianDiffusion:
             max_log = _extract_into_tensor(np.log(self.betas), t, x.shape)
             frac = (model_var_values + 1) / 2
             model_log_variance = frac * max_log + (1 - frac) * min_log
-            model_variance = th.exp(model_log_variance)
+            model_variance = torch.exp(model_log_variance)
 
         def process_xstart(x):
             if denoised_fn is not None:
@@ -285,6 +286,7 @@ class GaussianDiffusion:
             "variance": model_variance,
             "log_variance": model_log_variance,
             "pred_xstart": pred_xstart,
+            "epsilon" : model_output # for train
         }
 
     def _predict_xstart_from_eps(self, x_t, t, eps):
@@ -345,7 +347,7 @@ class GaussianDiffusion:
                  - 'sample': a random sample from the model.
                  - 'pred_xstart': a prediction of x_0.
         """
-        noise = th.randn_like(x)
+        noise = torch.randn_like(x)
 
         if conf.inpa_inj_sched_prev:
 
@@ -362,13 +364,13 @@ class GaussianDiffusion:
                 if conf.inpa_inj_sched_prev_cumnoise:
                     weighed_gt = self.get_gt_noised(gt, int(t[0].item()))
                 else:
-                    gt_weight = th.sqrt(alpha_cumprod)
+                    gt_weight = torch.sqrt(alpha_cumprod)
                     gt_part = gt_weight * gt
 
-                    noise_weight = th.sqrt((1 - alpha_cumprod))
-                    noise_part = noise_weight * th.randn_like(x)
+                    noise_weight = torch.sqrt((1 - alpha_cumprod))
+                    noise_part = noise_weight * torch.randn_like(x)
 
-                    weighed_gt = gt_part + noise_part
+                    weighed_gt = gt_part + noise_part # x_{t}
 
                 x = (
                     gt_keep_mask * (
@@ -400,7 +402,7 @@ class GaussianDiffusion:
             )
 
         sample = out["mean"] + nonzero_mask * \
-            th.exp(0.5 * out["log_variance"]) * noise
+            torch.exp(0.5 * out["log_variance"]) * noise
 
         result = {"sample": sample,
                   "pred_xstart": out["pred_xstart"], 'gt': model_kwargs.get('gt')}
@@ -487,7 +489,7 @@ class GaussianDiffusion:
         if noise is not None:
             image_after_step = noise
         else:
-            image_after_step = th.randn(*shape, device=device)
+            image_after_step = torch.randn(*shape, device=device)
 
         debug_steps = conf.pget('debug.num_timesteps')
 
@@ -497,7 +499,7 @@ class GaussianDiffusion:
         pred_xstart = None
 
         idx_wall = -1
-        sample_idxs = defaultdict(lambda: 0)
+        sample_idxs = defaultdict(lambda: 0) # https://zhuanlan.zhihu.com/p/345741967
 
         if conf.schedule_jump_params:
             times = get_schedule_jump(**conf.schedule_jump_params)
@@ -509,11 +511,11 @@ class GaussianDiffusion:
 
             for t_last, t_cur in time_pairs:
                 idx_wall += 1
-                t_last_t = th.tensor([t_last] * shape[0],  # pylint: disable=not-callable
+                t_last_t = torch.tensor([t_last] * shape[0],  # pylint: disable=not-callable
                                      device=device)
 
                 if t_cur < t_last:  # reverse
-                    with th.no_grad():
+                    with torch.no_grad():
                         image_before_step = image_after_step.clone()
                         out = self.p_sample(
                             model,
@@ -542,9 +544,14 @@ class GaussianDiffusion:
                         est_x_0=out['pred_xstart'], t=t_last_t+t_shift, debug=False)
                     pred_xstart = out["pred_xstart"]
 
+    def from_x0_get_xt(self, x0, t):
+        return _extract_into_tensor(self.sqrt_alphas_cumprod, t, x0.shape) * x0\
+                 +_extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x0.shape) * \
+                 torch.randn_like(x0)
+
 def _extract_into_tensor(arr, timesteps, broadcast_shape):
     """
-    Extract values from a 1-D numpy array for a batch of indices.
+    Extract values from a 1-D numpy array for a batch of indices(指标).
 
     :param arr: the 1-D numpy array.
     :param timesteps: a tensor of indices into the array to extract.
@@ -552,7 +559,10 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
                             dimension equal to the length of timesteps.
     :return: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
     """
-    res = th.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
+    if isinstance(arr, torch.Tensor):
+        res = arr.to(device=timesteps.device)[timesteps].float()
+    else:
+        res = torch.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res.expand(broadcast_shape)

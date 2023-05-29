@@ -21,7 +21,7 @@ process towards more realistic images.
 
 import os
 import argparse
-import torch as th
+import torch
 import torch.nn.functional as F
 import time
 import conf_mgt
@@ -49,7 +49,7 @@ def toU8(sample):
     if sample is None:
         return sample
 
-    sample = ((sample + 1) * 127.5).clamp(0, 255).to(th.uint8)
+    sample = ((sample + 1) * 127.5).clamp(0, 255).to(torch.uint8)
     sample = sample.permute(0, 2, 3, 1)
     sample = sample.contiguous()
     sample = sample.detach().cpu().numpy()
@@ -62,7 +62,10 @@ def main(conf: conf_mgt.Default_Conf):
 
     device = dist_util.dev(conf.get('device'))
 
-
+    """
+    return a unet model (./guided_diffusion/script_util.py:192)
+    and a class of Guassian Process.
+    """
     model, diffusion = create_model_and_diffusion(
         **select_args(conf, model_and_diffusion_defaults().keys()), conf=conf
     )
@@ -93,12 +96,12 @@ def main(conf: conf_mgt.Default_Conf):
 
         def cond_fn(x, t, y=None, gt=None, **kwargs):
             assert y is not None
-            with th.enable_grad():
+            with torch.enable_grad():
                 x_in = x.detach().requires_grad_(True)
                 logits = classifier(x_in, t)
                 log_probs = F.log_softmax(logits, dim=-1)
                 selected = log_probs[range(len(logits)), y.view(-1)]
-                return th.autograd.grad(selected.sum(), x_in)[0] * conf.classifier_scale
+                return torch.autograd.grad(selected.sum(), x_in)[0] * conf.classifier_scale
     else:
         cond_fn = None
 
@@ -118,7 +121,7 @@ def main(conf: conf_mgt.Default_Conf):
     for batch in iter(dl):
 
         for k in batch.keys():
-            if isinstance(batch[k], th.Tensor):
+            if isinstance(batch[k], torch.Tensor):
                 batch[k] = batch[k].to(device)
 
         model_kwargs = {}
@@ -132,10 +135,10 @@ def main(conf: conf_mgt.Default_Conf):
         batch_size = model_kwargs["gt"].shape[0]
 
         if conf.cond_y is not None:
-            classes = th.ones(batch_size, dtype=th.long, device=device)
+            classes = torch.ones(batch_size, dtype=torch.long, device=device)
             model_kwargs["y"] = classes * conf.cond_y
         else:
-            classes = th.randint(
+            classes = torch.randint(
                 low=0, high=NUM_CLASSES, size=(batch_size,), device=device
             )
             model_kwargs["y"] = classes
@@ -159,7 +162,7 @@ def main(conf: conf_mgt.Default_Conf):
         srs = toU8(result['sample'])
         gts = toU8(result['gt'])
         lrs = toU8(result.get('gt') * model_kwargs.get('gt_keep_mask') + (-1) *
-                   th.ones_like(result.get('gt')) * (1 - model_kwargs.get('gt_keep_mask')))
+                   torch.ones_like(result.get('gt')) * (1 - model_kwargs.get('gt_keep_mask')))
 
         gt_keep_masks = toU8((model_kwargs.get('gt_keep_mask') * 2 - 1))
 

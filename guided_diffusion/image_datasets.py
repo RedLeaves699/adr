@@ -42,6 +42,7 @@ def load_data_inpa(
     drop_last=True,
     conf=None,
     offset=0,
+    num_device=1,
     ** kwargs
 ):
     """
@@ -92,12 +93,12 @@ def load_data_inpa(
 
     if deterministic:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=drop_last
+            dataset, batch_size=batch_size * num_device, shuffle=False, num_workers=1, drop_last=drop_last
         )
 
     else:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=drop_last
+            dataset, batch_size=batch_size * num_device, shuffle=True, num_workers=1, drop_last=drop_last
         )
 
     if return_dataloader:

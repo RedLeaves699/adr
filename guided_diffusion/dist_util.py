@@ -21,7 +21,7 @@ Helpers for distributed training.
 import io
 
 import blobfile as bf
-import torch as th
+import torch
 
 
 def dev(device):
@@ -29,15 +29,15 @@ def dev(device):
     Get the device to use for torch.distributed.
     """
     if device is None:
-        if th.cuda.is_available():
-            return th.device(f"cuda")
-        return th.device("cpu")
-    return th.device(device)
+        if torch.cuda.is_available():
+            return torch.device(f"cuda")
+        return torch.device("cpu")
+    return torch.device(device)
 
 
 def load_state_dict(path, backend=None, **kwargs):
     with bf.BlobFile(path, "rb") as f:
         data = f.read()
-    return th.load(io.BytesIO(data), **kwargs)
+    return torch.load(io.BytesIO(data), **kwargs)
 
 

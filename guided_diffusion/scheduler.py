@@ -197,6 +197,7 @@ def get_schedule_jump_test(to_supplement=False):
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
     plt.plot(ts)
+    # print(list(zip(ts[:-1], ts[1:]))[0:100])
 
     fig = plt.gcf()
     fig.set_size_inches(20, 10)
