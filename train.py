@@ -127,10 +127,10 @@ class train_Diffusion:
 
         for epoch in tqdm(range(self.iter)):
 
-            for i, image_dict in enumerate(tqdm(self.dataloader)):
+            for i, image_dict in enumerate(self.dataloader):
                 with torch.no_grad():
                     x_0 = image_dict['GT'].cuda(self.device_ids[0])
-                    print(x_0.shape)
+                    # print(x_0.shape)
                     idx_t = torch.randint(0, len(self.diffusion.timestep_map),
                                      (x_0.shape[0],)).cuda(self.device_ids[0]) # t ~ U(0, T)，但是我们在这里传索引
                     x_t = self.diffusion.from_x0_get_xt(x_0, idx_t).cuda(self.device_ids[0])
